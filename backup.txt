@@ -1,0 +1,457 @@
+dashboard 
+
+
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <title>Switch Monitoring Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #f2f2f2; }
+        .up { background-color: #d4edda; color: green; }
+        .down { background-color: #f8d7da; color: red; }
+        .unknown { background-color: #fff3cd; color: orange; }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-weight: bold;
+            color: white;
+        }
+        .low-risk { background-color: #28a745; }      /* Green */
+        .medium-risk { background-color: #ffc107; }   /* Yellow */
+        .high-risk { background-color: #dc3545; }     /* Red */
+        .critical-risk { background-color: #8b0000; } /* Dark red */
+    </style>
+    <script>
+        // Auto-refresh every 10 seconds
+        setTimeout(function() {
+            window.location.href = window.location.href;
+        }, 10000);
+    </script>
+</head>
+<body>
+    <h1>Switch Monitoring Dashboard</h1>
+
+    <form method="get" action="/">
+        <input type="text" name="search_ip" placeholder="Search by IP..." value="{{ search_ip }}" />
+        <input type="text" name="search_name" placeholder="Search by Name..." value="{{ search_name }}">
+        <button type="submit">Search</button>
+        {% if search_ip or search_name %}
+            <a href="/">Clear</a>
+        {% endif %}
+    </form>
+
+    <br>
+
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>IP</th>
+            <th>Status</th>
+            <th>Response Time (ms)</th>
+            <th>Risk</th>
+            <th>Avg Baseline</th>
+            <th>Std Dev Baseline</th>
+            <th>Actions</th>
+        </tr>
+        {% if devices %}
+            {% for dev in devices %}
+            <tr>
+                <td>{{ dev[0] }}</td>
+                <td>{{ dev[1] }}</td>
+                <td><a href="/logs/{{ dev[0] }}">{{ dev[2] }}</a></td>
+                <td class="{% if dev[3] == 'UP' %}up{% elif dev[3] == 'DOWN' %}down{% else %}unknown{% endif %}">
+                    {{ dev[3] }}
+                </td>
+                <td>
+                    {% if dev[4] != 'N/A' %}
+                        {{ dev[4] }} ms
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                <td>
+                    {% set risk = dev[5] %}
+                    {% if risk is not none %}
+                        {% if risk >= 0.90 %}
+                            <span class="badge critical-risk">Critical</span>
+                        {% elif risk >= 0.70 %}
+                            <span class="badge high-risk">High</span>
+                        {% elif risk >= 0.40 %}
+                            <span class="badge medium-risk">Medium</span>
+                        {% else %}
+                            <span class="badge low-risk">Low</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="badge" style="background-color: gray;">Unknown</span>
+                    {% endif %}
+                </td>
+                <td>{{ dev[6] }}</td>  <!-- Avg Baseline -->
+                <td>{{ dev[7] }}</td>  <!-- Std Dev Baseline -->
+                <td>
+                <a href="{{ url_for('device_detail', ip=dev[2]) }}">
+                    <button>View Stats</button>
+                </a>
+            </td>
+            </tr>
+            {% endfor %}
+        {% else %}
+            <tr>
+                <td colspan="8">No devices found. Please add some from <a href="/manage">Manage Devices</a>.</td>
+            </tr>
+        {% endif %}
+    </table>
+
+    <br><a href="/manage">➕ Manage Devices</a>
+</body>
+</html>
+
+
+
+device_detail
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Device Stats – {{ name }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 30px;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            margin-bottom: 10px;
+        }
+        .stats {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 0 10px #ddd;
+            max-width: 600px;
+        }
+        .stats p {
+            font-size: 16px;
+            margin: 6px 0;
+        }
+        canvas {
+            margin-top: 30px;
+            max-width: 100%;
+        }
+
+        .range-selector {
+            margin-top: 20px;
+        }
+
+        .range-selector button {
+            margin-right: 10px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+
+        .range-selector button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <a href="/" style="text-decoration: none;">
+    <button style="margin-bottom: 20px; padding: 8px 16px; font-size: 14px; cursor: pointer;">
+        ⬅️ Back to Dashboard
+    </button>
+</a>
+    <h1>📡 Device Statistics</h1>
+    <div class="stats">
+        <p><strong>Name:</strong> {{ name }}</p>
+        <p><strong>IP Address:</strong> {{ ip }}</p>
+        <p><strong>Uptime Ratio:</strong> {{ uptime_ratio * 100 }}%</p>
+        <p><strong>Uptime Count:</strong> {{ up_count }}</p>
+        <p><strong>Downtime Count:</strong> {{ down_count }}</p>
+        <p><strong>Avg Response Time:</strong> {{ avg_response }} ms</p>
+        <p><strong>Std Dev Response Time:</strong> {{ std_response }} ms</p>
+        <p><strong>5x DOWN Streaks:</strong> {{ down_streaks }}</p>
+    </div>
+
+    <div class="range-selector">
+        <strong>View for:</strong>
+        {% for label, val in [('3h', '3h'), ('6h', '6h'), ('12h', '12h'), ('1d', '1d'), ('3d', '3d'), ('All', 'all')] %}
+            <button onclick="window.location.href='?range={{ val }}'">{{ label }}</button>
+        {% endfor %}
+    </div>
+
+    {% if response_times and timestamps %}
+    <canvas id="responseChart"></canvas>
+
+    <script>
+        try {
+            const ctx = document.getElementById('responseChart').getContext('2d');
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: {{ timestamps | tojson }},
+                    datasets: [{
+                        label: 'Response Time (ms)',
+                        data: {{ response_times | tojson }},
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: false
+                        }
+                    }
+                }
+            });
+        } catch (e) {
+            console.error("Error rendering chart:", e);
+        }
+    </script>
+    {% endif %}
+</body>
+</html>
+
+
+logs
+
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ping Logs</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #f2f2f2; }
+        .up { background-color: #d4edda; color: green; }
+        .down { background-color: #f8d7da; color: red; }
+        .unknown { background-color: #fff3cd; color: orange; }
+    </style>
+</head>
+<body>
+    <h1>Ping Logs</h1>
+
+    <a href="/">← Back to Dashboard</a>
+    <br><br>
+
+    {% if logs %}
+    <table>
+        <tr>
+            <th>Timestamp</th>
+            <th>Status</th>
+            <th>Response Time (ms)</th>
+        </tr>
+        {% for log in logs %}
+        <tr class="{% if log[1] == 'UP' %}up{% elif log[1] == 'DOWN' %}down{% else %}unknown{% endif %}">
+            <td>{{ log[0] }}</td>
+            <td>{{ log[1] }}</td>
+            <td>{{ log[2] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% else %}
+        <p>No logs available for this device.</p>
+    {% endif %}
+</body>
+</html>
+
+
+manage
+
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Manage Devices</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 30px;
+            background-color: #f4f6f8;
+            color: #333;
+        }
+
+        h1 {
+            color: #2c3e50;
+        }
+
+        form {
+            background-color: #fff;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-width: 500px;
+        }
+
+        label {
+            display: block;
+            margin: 10px 0 5px;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            margin: 10px 0;
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        button[type="submit"] {
+            background-color: #3498db;
+            color: white;
+        }
+
+        button[type="submit"]:hover {
+            background-color: #2980b9;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            background-color: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: center;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background-color: #2c3e50;
+            color: white;
+        }
+
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        .delete-link {
+            color: #e74c3c;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .delete-link:hover {
+            text-decoration: underline;
+        }
+
+        .delete-all {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .delete-all:hover {
+            background-color: #c0392b;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            text-decoration: none;
+            color: #3498db;
+            font-weight: bold;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-link">← Back to Dashboard</a>
+
+    <h1>Manage Devices</h1>
+
+    <!-- Add Device Form -->
+    <form method="POST">
+        <label>Name:</label>
+        <input type="text" name="name" required>
+
+        <label>IP:</label>
+        <input type="text" name="ip" required>
+
+        <label>Type:</label>
+        <input type="text" name="type" required>
+
+        <label>Email:</label>
+        <input type="email" name="email" required>
+
+        <button type="submit">➕ Add Device</button>
+    </form>
+
+    <!-- Search Form -->
+    <form method="get" action="/manage">
+        <input type="text" name="search_ip" placeholder="Search by IP..." value="{{ search_ip or '' }}" />
+        <input type="text" name="search_name" placeholder="Search by Name..." value="{{ search_name }}">
+
+        <button type="submit">Search</button>
+        {% if search_ip %}
+            <a href="/manage">Clear</a>
+        {% endif %}
+    </form>
+
+    <br>
+
+    <!-- Device Table -->
+    <h2>Current Devices</h2>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>IP</th>
+            <th>Type</th>
+            <th>Email</th>
+            <th>Action</th>
+        </tr>
+        {% for dev in devices %}
+        <tr>
+            <td>{{ dev[0] }}</td>
+            <td>{{ dev[1] }}</td>
+            <td>{{ dev[2] }}</td>
+            <td>{{ dev[3] }}</td>
+            <td>{{ dev[4] }}</td>
+            <td><a class="delete-link" href="/delete/{{ dev[0] }}">Delete</a></td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <!-- Delete All -->
+    <form action="/delete_all" method="get" onsubmit="return confirm('Are you sure you want to delete ALL devices?');">
+        <button type="submit" class="delete-all">❌ Delete All Devices</button>
+    </form>
+
+    
+
+</body>
+</html>
