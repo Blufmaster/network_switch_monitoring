@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Switch Monitoring Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #f4f4f4;
+            --text-color: #222;
+            --card-bg: #fff;
+            --border-color: #ccc;
+            --badge-low: #28a745;
+            --badge-medium: #ffc107;
+            --badge-high: #dc3545;
+            --badge-critical: #8b0000;
+        }
+
+        body.dark-mode {
+            --bg-color: #121212;
+            --text-color: #e0e0e0;
+            --card-bg: #1e1e1e;
+            --border-color: #333;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: 30px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .dark-toggle {
+            padding: 6px 14px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            background: #444;
+            color: white;
+        }
+
+        form {
+            margin-bottom: 16px;
+        }
+
+        input[type="text"] {
+            padding: 6px 10px;
+            margin-right: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: var(--card-bg);
+            box-shadow: 0 0 6px rgba(0, 0, 0, 0.05);
+        }
+
+        th, td {
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        th {
+            background-color: #e0e0e0;
+        }
+
+        .up { background-color: #d4edda; color: green; }
+        .down { background-color: #f8d7da; color: red; }
+        .unknown { background-color: #fff3cd; color: orange; }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .low-risk { background-color: var(--badge-low); }
+        .medium-risk { background-color: var(--badge-medium); }
+        .high-risk { background-color: var(--badge-high); }
+        .critical-risk { background-color: var(--badge-critical); }
+
+        .actions button {
+            font-size: 12px;
+        }
+
+        a {
+            color: var(--text-color);
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body class="light-mode">
+    <div class="top-bar">
+        <h1>📊 Switch Monitoring Dashboard</h1>
+        <button class="dark-toggle" onclick="toggleDarkMode()">🌙 Toggle Dark Mode</button>
+    </div>
+
+    <form method="get" action="/">
+        <input type="text" name="search_ip" placeholder="Search by IP..." value="{{ search_ip }}" />
+        <input type="text" name="search_name" placeholder="Search by Name..." value="{{ search_name }}">
+        <button type="submit">Search</button>
+        {% if search_ip or search_name %}
+            <a href="/">Clear</a>
+        {% endif %}
+    </form>
+
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>IP</th>
+            <th>Status</th>
+            <th>Response Time</th>
+            <th>Risk</th>
+            <th>Avg Baseline</th>
+            <th>Std Dev</th>
+            <th>Actions</th>
+        </tr>
+        {% if devices %}
+            {% for dev in devices %}
+            <tr>
+                <td>{{ dev[0] }}</td>
+                <td>{{ dev[1] }}</td>
+                <td><a href="/logs/{{ dev[0] }}">{{ dev[2] }}</a></td>
+                <td class="{% if dev[3] == 'UP' %}up{% elif dev[3] == 'DOWN' %}down{% else %}unknown{% endif %}">
+                    {{ dev[3] }}
+                </td>
+                <td>
+                    {% if dev[4] != 'N/A' %}
+                        {{ dev[4] }} ms
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                <td>
+                    {% set risk = dev[5] %}
+                    {% if risk is not none %}
+                        {% if risk >= 0.90 %}
+                            <span class="badge critical-risk">Critical</span>
+                        {% elif risk >= 0.70 %}
+                            <span class="badge high-risk">High</span>
+                        {% elif risk >= 0.40 %}
+                            <span class="badge medium-risk">Medium</span>
+                        {% else %}
+                            <span class="badge low-risk">Low</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="badge" style="background-color: gray;">Unknown</span>
+                    {% endif %}
+                </td>
+                <td>{{ dev[6] }}</td>
+                <td>{{ dev[7] }}</td>
+                <td class="actions">
+                    <a href="{{ url_for('device_detail', ip=dev[2]) }}">
+                        <button>View Stats</button>
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        {% else %}
+            <tr>
+                <td colspan="9">No devices found. Please add some from <a href="/manage">Manage Devices</a>.</td>
+            </tr>
+        {% endif %}
+    </table>
+
+    <br>
+    <a href="/manage">➕ Manage Devices</a>
+
+    <script>
+        function toggleDarkMode() {
+            const body = document.body;
+            const isDark = body.classList.contains("dark-mode");
+            body.classList.toggle("dark-mode", !isDark);
+            body.classList.toggle("light-mode", isDark);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ping Logs</title>
+    <style>
+        :root {
+            --bg: #f4f4f4;
+            --text: #222;
+            --table-bg: #fff;
+            --border: #ccc;
+            --header-bg: #e0e0e0;
+            --link: #007bff;
+            --btn-bg: #007bff;
+            --btn-hover: #0056b3;
+        }
+
+        body.dark-mode {
+            --bg: #121212;
+            --text: #e0e0e0;
+            --table-bg: #1e1e1e;
+            --border: #333;
+            --header-bg: #2a2a2a;
+            --link: #66b2ff;
+            --btn-bg: #444;
+            --btn-hover: #666;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            padding: 30px;
+            background-color: var(--bg);
+            color: var(--text);
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: var(--table-bg);
+            box-shadow: 0 0 10px var(--border);
+        }
+
+        th, td {
+            border: 1px solid var(--border);
+            padding: 10px;
+            text-align: center;
+        }
+
+        th {
+            background-color: var(--header-bg);
+        }
+
+        .up { background-color: #d4edda; color: green; }
+        .down { background-color: #f8d7da; color: red; }
+        .unknown { background-color: #fff3cd; color: orange; }
+
+        .dark-mode .up { background-color: #245b2a; color: #a8f0b2; }
+        .dark-mode .down { background-color: #6b1e1e; color: #f8bfbf; }
+        .dark-mode .unknown { background-color: #5f4f1c; color: #ffe199; }
+
+        .btn, .dark-toggle {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            background-color: var(--btn-bg);
+            color: white;
+            cursor: pointer;
+        }
+
+        .btn:hover, .dark-toggle:hover {
+            background-color: var(--btn-hover);
+        }
+
+        a {
+            text-decoration: none;
+            color: var(--link);
+        }
+    </style>
+</head>
+<body class="light-mode">
+    <div class="top-bar">
+        <a href="/"><button class="btn">⬅️ Back to Dashboard</button></a>
+        <button class="dark-toggle" onclick="toggleDarkMode()">🌙 Toggle Dark Mode</button>
+    </div>
+
+    <h1>📋 Ping Logs</h1>
+
+    {% if logs %}
+        <table>
+            <tr>
+                <th>Timestamp</th>
+                <th>Status</th>
+                <th>Response Time (ms)</th>
+            </tr>
+            {% for log in logs %}
+            <tr class="{% if log[1] == 'UP' %}up{% elif log[1] == 'DOWN' %}down{% else %}unknown{% endif %}">
+                <td>{{ log[0] }}</td>
+                <td>{{ log[1] }}</td>
+                <td>{{ log[2] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    {% else %}
+        <p>No logs available for this device.</p>
+    {% endif %}
+
+    <script>
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            document.body.classList.toggle('light-mode');
+        }
+    </script>
+</body>
+</html>

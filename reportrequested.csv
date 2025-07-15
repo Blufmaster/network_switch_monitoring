@@ -1,0 +1,4 @@
+device_id,name,ip,5x_down_sequences
+26,Ayush,192.168.31.150,2
+30,Quad9,10.255.255.1,1
+31,Cloudfare secondary,1.0.0.1,1
