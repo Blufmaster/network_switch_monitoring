@@ -275,6 +275,18 @@ def get_device_stats(ip):
 
 
 
+def delete_old_ping_logs(days=15):
+    cutoff_date = datetime.now() - timedelta(days=days)
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                DELETE FROM ping_logs
+                WHERE timestamp < %s
+            """, (cutoff_date,))
+        conn.commit()
+
+
+
 
 
 #run this file directly to initialize the database
@@ -284,3 +296,6 @@ def get_device_stats(ip):
 
 
 
+if __name__ == "__main__":
+    init_db()
+    print("✅ Database initialized.")

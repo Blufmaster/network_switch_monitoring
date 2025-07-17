@@ -24,7 +24,7 @@ def handle_ping(dev):
     else:
         failure_count[ip] = 0
 
-    if failure_count[ip] >= 3 and ip not in alert_sent:  # 3 consecutive failures then only the mail will be sent 
+    if failure_count[ip] >= 5 and ip not in alert_sent:  # 3 consecutive failures then only the mail will be sent 
         print(f"[ALERT] Device down: {name} has been down for 3 cycles ({ip}). Notifying {email}")
         send_alert_email(name, ip, email, issue="Device Down")
         send_whatsapp_alert(name, ip)

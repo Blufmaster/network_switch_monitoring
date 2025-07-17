@@ -18,7 +18,8 @@ from database import (
     get_device_id_by_ip,
     log_ping_result,
     get_ping_logs_for_device,
-    get_all_risk_scores
+    #get_all_risk_score,
+    delete_old_ping_logs
 )
 from ping_worker import start_background_thread, device_status
 
@@ -28,17 +29,32 @@ app = Flask(__name__)
 init_db()
 
 from database import get_all_risk_scores, get_all_device_baselines
-
 @app.route("/", methods=["GET"])
 def dashboard():
     search_ip = request.args.get("search_ip", "").strip()
     search_name = request.args.get("search_name", "").strip()
+    time_range = request.args.get("range", "6h")
+
+    range_map = {
+        "3h": 3,
+        "6h": 6,
+        "12h": 12,
+        "1d": 24,
+        "3d": 72,
+        "all": None
+    }
+
+    hours = range_map.get(time_range, 6)
+    since = datetime.utcnow() - timedelta(hours=hours) if hours else None
 
     devices = get_devices()
     risk_scores = get_all_risk_scores()
-    baselines = get_all_device_baselines()  # ✅ Fetch baseline data
+    baselines = get_all_device_baselines()
 
     statuses = []
+    current_5x_down = []
+    historical_5x_down = []
+
     for d in devices:
         dev_id, name, ip = d[0], d[1], d[2]
 
@@ -50,18 +66,43 @@ def dashboard():
         stat = device_status.get(ip, {})
         status = stat.get("status", "UNKNOWN")
         response_time = stat.get("response_time", "N/A")
-
         risk_score = risk_scores.get(dev_id, None)
 
-        # ✅ Force high risk if current status is DOWN
         if status == "DOWN":
-            risk_score = 1.0
+            risk_score = 1.0  # Force critical risk if currently down
 
         baseline = baselines.get(dev_id, {})
         avg_baseline = round(baseline.get("avg", 0), 2)
         std_baseline = round(baseline.get("std", 0), 2)
 
-        # ✅ Add baseline values to statuses list
+        # Historical 5× DOWN streak detection
+        logs_df = get_ping_logs_for_device(dev_id, since=since)
+        streak = 0
+        historical_found = False
+
+        for _, row in logs_df.iterrows():
+            if row["status"] == "DOWN":
+                streak += 1
+                if streak >= 5:
+                    historical_found = True
+                    break
+            else:
+                streak = 0
+
+        if historical_found:
+            historical_5x_down.append(name)
+
+        # Current 5× DOWN streak detection
+        current_streak = 0
+        recent_logs = logs_df.tail(5)
+        if not recent_logs.empty and len(recent_logs) >= 5:
+            for _, row in recent_logs.iterrows():
+                if row["status"] == "DOWN":
+                    current_streak += 1
+
+            if current_streak >= 5 and status == "DOWN":
+                current_5x_down.append(name)
+
         statuses.append((
             dev_id,
             name,
@@ -73,12 +114,21 @@ def dashboard():
             std_baseline
         ))
 
+    # ✅ Sort by risk_score descending (None becomes -1 to go at bottom)
+    statuses.sort(key=lambda x: x[5] if x[5] is not None else -1, reverse=True)
+
     return render_template(
         "dashboard.html",
         devices=statuses,
+        current_down_streak_devices=current_5x_down,
+        historical_down_streak_devices=historical_5x_down,
+        selected_range=time_range,
         search_ip=search_ip,
         search_name=search_name
     )
+
+
+
 
 
 @app.route("/manage", methods=["GET", "POST"])
@@ -191,6 +241,20 @@ def device_detail(ip):
     stats["selected_range"] = range_param
 
     return render_template("device_detail.html", **stats)
+
+
+
+
+def run_log_cleanup():
+    while True:
+        delete_old_ping_logs(days=15)
+        print("[Cleanup] Deleted old ping logs")
+        time.sleep(86400)  # Run once every 24 hours
+
+# Start cleanup in background
+cleanup_thread = threading.Thread(target=run_log_cleanup, daemon=True)
+cleanup_thread.start()
+
 
 
 

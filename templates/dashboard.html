@@ -91,6 +91,11 @@
             background-color: #e0e0e0;
         }
 
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+        }
+
         .up { background-color: #d4edda; color: green; }
         .down { background-color: #f8d7da; color: red; }
         .unknown { background-color: #fff3cd; color: orange; }
@@ -121,48 +126,83 @@
     </style>
 </head>
 <body class="light-mode">
-    <div class="top-bar">
-        <h1>📊 Switch Monitoring Dashboard</h1>
-        <button class="dark-toggle" onclick="toggleDarkMode()">🌙 Toggle Dark Mode</button>
-    </div>
+<div class="top-bar">
+    <h1>📊 Switch Monitoring Dashboard</h1>
+    <button class="dark-toggle" onclick="toggleDarkMode()">🌙 Toggle Dark Mode</button>
+</div>
 
-    <form method="get" action="/">
+<form method="get" action="/" style="display: flex; justify-content: space-between; flex-wrap: wrap; align-items: center; margin-bottom: 16px;">
+    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
         <input type="text" name="search_ip" placeholder="Search by IP..." value="{{ search_ip }}" />
         <input type="text" name="search_name" placeholder="Search by Name..." value="{{ search_name }}">
         <button type="submit">Search</button>
         {% if search_ip or search_name %}
             <a href="/">Clear</a>
         {% endif %}
-    </form>
+    </div>
+    <div>
+        <select name="range">
+            <option value="3h" {% if selected_range == '3h' %}selected{% endif %}>Last 3h</option>
+            <option value="6h" {% if selected_range == '6h' %}selected{% endif %}>Last 6h</option>
+            <option value="12h" {% if selected_range == '12h' %}selected{% endif %}>Last 12h</option>
+            <option value="1d" {% if selected_range == '1d' %}selected{% endif %}>Last 1 day</option>
+            <option value="3d" {% if selected_range == '3d' %}selected{% endif %}>Last 3 days</option>
+            <option value="all" {% if selected_range == 'all' %}selected{% endif %}>All time</option>
+        </select>
+    </div>
+</form>
+<a href="/manage">➕ Manage Devices</a>
+<p style="margin-bottom: 20px;"></p>
 
-    <table>
+
+{% if current_down_streak_devices or historical_down_streak_devices %}
+<div style="display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 24px;">
+    {% if current_down_streak_devices %}
+    <div style="flex: 1; min-width: 300px; background-color: var(--card-bg); border-left: 6px solid var(--badge-critical); padding: 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <strong style="color: var(--badge-critical); font-size: 16px;">🚨 Devices currently DOWN 5× in a row:</strong>
+        <ul style="margin-top: 10px; padding-left: 20px;">
+            {% for name in current_down_streak_devices %}
+                <li>{{ name }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    {% if historical_down_streak_devices %}
+    <div style="flex: 1; min-width: 300px; background-color: var(--card-bg); border-left: 6px solid var(--badge-high); padding: 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <strong style="color: var(--badge-high); font-size: 16px;">🕒 Devices with 5× DOWN streak in last {{ selected_range.upper() }}:</strong>
+        <ul style="margin-top: 10px; padding-left: 20px;">
+            {% for name in historical_down_streak_devices %}
+                <li>{{ name }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<table id="device-table">
+    <thead>
         <tr>
             <th>ID</th>
             <th>Name</th>
             <th>IP</th>
             <th>Status</th>
             <th>Response Time</th>
-            <th>Risk</th>
+            <th class="sortable" onclick="sortTableByRisk()">Risk ⬍</th>
             <th>Avg Baseline</th>
             <th>Std Dev</th>
             <th>Actions</th>
         </tr>
+    </thead>
+    <tbody>
         {% if devices %}
             {% for dev in devices %}
             <tr>
                 <td>{{ dev[0] }}</td>
                 <td>{{ dev[1] }}</td>
                 <td><a href="/logs/{{ dev[0] }}">{{ dev[2] }}</a></td>
-                <td class="{% if dev[3] == 'UP' %}up{% elif dev[3] == 'DOWN' %}down{% else %}unknown{% endif %}">
-                    {{ dev[3] }}
-                </td>
-                <td>
-                    {% if dev[4] != 'N/A' %}
-                        {{ dev[4] }} ms
-                    {% else %}
-                        N/A
-                    {% endif %}
-                </td>
+                <td class="{% if dev[3] == 'UP' %}up{% elif dev[3] == 'DOWN' %}down{% else %}unknown{% endif %}">{{ dev[3] }}</td>
+                <td>{% if dev[4] != 'N/A' %}{{ dev[4] }} ms{% else %}N/A{% endif %}</td>
                 <td>
                     {% set risk = dev[5] %}
                     {% if risk is not none %}
@@ -189,22 +229,42 @@
             </tr>
             {% endfor %}
         {% else %}
-            <tr>
-                <td colspan="9">No devices found. Please add some from <a href="/manage">Manage Devices</a>.</td>
-            </tr>
+            <tr><td colspan="9">No devices found. Please add some from <a href="/manage">Manage Devices</a>.</td></tr>
         {% endif %}
-    </table>
+    </tbody>
+</table>
 
-    <br>
-    <a href="/manage">➕ Manage Devices</a>
+<br>
 
-    <script>
-        function toggleDarkMode() {
-            const body = document.body;
-            const isDark = body.classList.contains("dark-mode");
-            body.classList.toggle("dark-mode", !isDark);
-            body.classList.toggle("light-mode", isDark);
-        }
-    </script>
+
+<script>
+    function toggleDarkMode() {
+        const body = document.body;
+        const isDark = body.classList.contains("dark-mode");
+        body.classList.toggle("dark-mode", !isDark);
+        body.classList.toggle("light-mode", isDark);
+    }
+
+    function sortTableByRisk() {
+        const table = document.getElementById("device-table");
+        const rows = Array.from(table.querySelectorAll("tbody tr"));
+        const riskRank = {
+            "critical": 4,
+            "high": 3,
+            "medium": 2,
+            "low": 1,
+            "unknown": 0
+        };
+
+        rows.sort((a, b) => {
+            const riskA = a.cells[5].innerText.trim().toLowerCase();
+            const riskB = b.cells[5].innerText.trim().toLowerCase();
+            return (riskRank[riskB] || 0) - (riskRank[riskA] || 0);
+        });
+
+        const tbody = table.querySelector("tbody");
+        rows.forEach(row => tbody.appendChild(row));
+    }
+</script>
 </body>
 </html>
