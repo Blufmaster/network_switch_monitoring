@@ -87,7 +87,7 @@ You can customize the following:
 
 ```bash
 # Clone repo
-git clone https://github.com/your-username/switch-monitoring-ai.git
+git clone https://github.com/Blufmaster/switch-monitoring-ai.git
 cd switch-monitoring-ai
 
 # Set up virtual env
