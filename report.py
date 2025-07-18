@@ -66,7 +66,7 @@ def fetch_five_down_sequences(days=1):
 
 def save_report_and_plot(df):
     if df.empty:
-        logging.info("✅ No 5x DOWN sequences found.")
+        logging.info(" No 5x DOWN sequences found.")
         return
 
     # Save to CSV
@@ -85,7 +85,7 @@ def save_report_and_plot(df):
 
     plot_path = "five_down_summary.png"
     plt.savefig(plot_path)
-    logging.info(f"📊 Plot saved to {plot_path}")
+    logging.info(f" Plot saved to {plot_path}")
     plt.show()
 
 

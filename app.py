@@ -19,13 +19,14 @@ from database import (
     log_ping_result,
     get_ping_logs_for_device,
     #get_all_risk_score,
-    delete_old_ping_logs
+    delete_old_ping_logs,
+    get_down_streaks_in_timeframe
 )
 from ping_worker import start_background_thread, device_status
 
 app = Flask(__name__)
 
-# ✅ Initialize database
+#  Initialize database
 init_db()
 
 from database import get_all_risk_scores, get_all_device_baselines
@@ -114,7 +115,7 @@ def dashboard():
             std_baseline
         ))
 
-    # ✅ Sort by risk_score descending (None becomes -1 to go at bottom)
+    #  Sort by risk_score descending (None becomes -1 to go at bottom)
     statuses.sort(key=lambda x: x[5] if x[5] is not None else -1, reverse=True)
 
     return render_template(
@@ -185,7 +186,7 @@ def show_logs(device_id):
     return render_template("logs.html", logs=logs)
 
 
-# ✅ Background thread for periodic AI-based risk score calculation
+#  Background thread for periodic AI-based risk score calculation
 def run_risk_score_updater():
     while True:
         print("[AI] Computing risk scores...")
@@ -196,9 +197,9 @@ def run_risk_score_updater():
 
 def run_baseline_updater():
     while True:
-        refresh_device_baselines(minutes=10)
+        refresh_device_baselines(minutes=10080)
         print("[AI] Updated device baselines.", flush=True)
-        time.sleep(300)  # 5 minutes (for testing; later switch to 24*3600 for 24 hours)  # Once every 24 hours change it later to 24hrs currently set to 5 mins for testing
+        time.sleep(3600)  # 5 minutes (for testing; later switch to 24*3600 for 24 hours)  # Once every 24 hours change it later to 24hrs currently set to 5 mins for testing
         # calculate baseline every 3 hours
 
         """| Task                   | Interval     | Data Used     |
@@ -247,13 +248,53 @@ def device_detail(ip):
 
 def run_log_cleanup():
     while True:
-        delete_old_ping_logs(days=15)
+        delete_old_ping_logs(days=15) # Delete logs older than 15 days
         print("[Cleanup] Deleted old ping logs")
         time.sleep(86400)  # Run once every 24 hours
 
 # Start cleanup in background
 cleanup_thread = threading.Thread(target=run_log_cleanup, daemon=True)
 cleanup_thread.start()
+
+from flask import request, render_template
+
+@app.route("/reports")
+def reports():
+    # Get selected timeframe from query parameter
+    hours_param = request.args.get("hours", "24")
+
+    if hours_param == "all":
+        hours = None  # Use None to indicate "all time"
+    else:
+        try:
+            hours = int(hours_param)
+        except ValueError:
+            hours = 24
+
+    # Retrieve DOWN streaks within the timeframe (or all time if hours is None)
+    five_x_down_list = get_down_streaks_in_timeframe(hours=hours)
+
+    # Get device risk and baseline data
+    devices = get_devices()
+    baselines = get_all_device_baselines()
+    risk_scores = get_all_risk_scores()
+
+    report_data = []
+    for d in devices:
+        dev_id, name, ip = d[0], d[1], d[2]
+        risk_score = risk_scores.get(dev_id, None)
+        baseline = baselines.get(dev_id, {})
+        report_data.append((name, ip, risk_score, baseline.get("avg", 0), baseline.get("std", 0)))
+
+    # Sort by risk score descending
+    report_data.sort(key=lambda x: x[2] if x[2] is not None else -1, reverse=True)
+
+    return render_template(
+        "reports.html",
+        five_x_down_list=five_x_down_list,
+        report_data=report_data,
+        selected_hours=hours_param
+    )
 
 
 
@@ -265,8 +306,8 @@ cleanup_thread.start()
 if __name__ == "__main__":
     # Avoid running threads twice in debug mode (Flask's auto-reload spawns two processes)
     if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
-        start_background_thread()  # ✅ Starts the pinger thread
-        threading.Thread(target=run_risk_score_updater, daemon=True).start()  # ✅ Risk score updater
-        threading.Thread(target=run_baseline_updater, daemon=True).start()    # ✅ Baseline updater
+        start_background_thread()  # Starts the pinger thread
+        threading.Thread(target=run_risk_score_updater, daemon=True).start()  # Risk score updater
+        threading.Thread(target=run_baseline_updater, daemon=True).start()    # Baseline updater
 
     app.run(host="127.0.0.1", port=8000, debug=True)

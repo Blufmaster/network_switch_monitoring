@@ -24,7 +24,7 @@ def handle_ping(dev):
     else:
         failure_count[ip] = 0
 
-    if failure_count[ip] >= 5 and ip not in alert_sent:  # 3 consecutive failures then only the mail will be sent 
+    if failure_count[ip] >= 5 and ip not in alert_sent:  # 5 consecutive failures then only the mail will be sent 
         print(f"[ALERT] Device down: {name} has been down for 3 cycles ({ip}). Notifying {email}")
         send_alert_email(name, ip, email, issue="Device Down")
         send_whatsapp_alert(name, ip)
@@ -47,7 +47,7 @@ def handle_ping(dev):
     if device_id:
         log_ping_result(device_id, response_time or 0.0, status)
 
-def ping_devices(interval=5, batch_size=2):
+def ping_devices(interval=2, batch_size=50):
     while True:
         devices = get_devices()
         print("[INFO] Starting batch ping...")
@@ -73,5 +73,5 @@ def ping_devices(interval=5, batch_size=2):
         time.sleep(interval)
 
 def start_background_thread():
-    thread = threading.Thread(target=ping_devices, kwargs={"interval": 5, "batch_size": 2}, daemon=True)
+    thread = threading.Thread(target=ping_devices, kwargs={"interval": 2, "batch_size": 50}, daemon=True)
     thread.start()

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Reports</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --bg-color: #f4f4f4;
+      --text-color: #222;
+      --card-bg: #fff;
+      --border-color: #ccc;
+      --btn-bg: #007bff;
+      --btn-hover: #0056b3;
+    }
+
+    body.dark-mode {
+      --bg-color: #121212;
+      --text-color: #e0e0e0;
+      --card-bg: #1e1e1e;
+      --border-color: #444;
+      --btn-bg: #444;
+      --btn-hover: #666;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 2rem;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    h1, h2 {
+      margin: 0 0 1rem 0;
+    }
+
+    nav a {
+      margin-right: 1rem;
+      text-decoration: none;
+      color: var(--btn-bg);
+      font-weight: bold;
+    }
+
+    section {
+      margin-top: 2rem;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      padding: 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 0 10px var(--border-color);
+      margin-bottom: 2rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+
+    table, th, td {
+      border: 1px solid var(--border-color);
+    }
+
+    th, td {
+      padding: 0.75rem;
+      text-align: left;
+    }
+
+    th {
+      background-color: rgba(0,0,0,0.05);
+    }
+
+    .dark-mode th {
+      background-color: #2c2c2c;
+    }
+
+    select {
+      padding: 0.5rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background-color: var(--card-bg);
+      color: var(--text-color);
+    }
+
+    button {
+      padding: 0.5rem 1rem;
+      background-color: var(--btn-bg);
+      border: none;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: var(--btn-hover);
+    }
+
+    label {
+      margin-right: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📊 Reports</h1>
+    <button onclick="toggleDarkMode()">🌙 Toggle Dark Mode</button>
+  </header>
+
+  <nav>
+    <a href="/">Dashboard</a>
+    <a href="/manage">Manage Devices</a>
+    <a href="/reports"><strong>Reports</strong></a>
+  </nav>
+
+  <section class="card">
+    <form method="get" action="/reports">
+      <label for="hours">Show 5× DOWN streaks in the last:</label>
+      <select name="hours" onchange="this.form.submit()">
+        <option value="1" {% if selected_hours|int == 1 %}selected{% endif %}>1 hour</option>
+        <option value="6" {% if selected_hours|int == 6 %}selected{% endif %}>6 hours</option>
+        <option value="12" {% if selected_hours|int == 12 %}selected{% endif %}>12 hours</option>
+        <option value="24" {% if selected_hours|int == 24 %}selected{% endif %}>24 hours</option>
+        <option value="168" {% if selected_hours|int == 168 %}selected{% endif %}>7 days</option>
+        <option value="0" {% if selected_hours|int == 0 %}selected{% endif %}>All time</option>
+      </select>
+    </form>
+
+    <h2>⚠️ Devices with 5× DOWN Streaks</h2>
+    {% if five_x_down_list %}
+    <table>
+      <thead>
+        <tr>
+          <th>Device Name</th>
+          <th>IP Address</th>
+          <th>Occurrences</th>
+          <th>Last Occurred</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for device in five_x_down_list %}
+        <tr>
+          <td>{{ device.device_name }}</td>
+          <td>{{ device.ip }}</td>
+          <td>{{ device.occurrences }}</td>
+          <td>
+            {% if device.last_occurred %}
+              {{ device.last_occurred.strftime("%Y-%m-%d %H:%M:%S") if device.last_occurred.__class__.__name__ == 'datetime' else device.last_occurred }}
+            {% else %}
+              N/A
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p>No data available for selected timeframe.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>📈 Device Risk Scores & Baselines</h2>
+    {% if report_data %}
+    <table>
+      <thead>
+        <tr>
+          <th>Device Name</th>
+          <th>IP Address</th>
+          <th>Risk Score</th>
+          <th>Avg Response Time (ms)</th>
+          <th>Std Deviation</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in report_data %}
+        <tr>
+          <td>{{ row[0] }}</td>
+          <td>{{ row[1] }}</td>
+          <td>
+            {% if row[2] is not none %}
+              {{ "%.2f"|format(row[2]) }}
+            {% else %}
+              N/A
+            {% endif %}
+          </td>
+          <td>{{ "%.2f"|format(row[3]) }}</td>
+          <td>{{ "%.2f"|format(row[4]) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p>No risk data available.</p>
+    {% endif %}
+  </section>
+
+  <script>
+    function toggleDarkMode() {
+      document.body.classList.toggle("dark-mode");
+    }
+  </script>
+</body>
+</html>

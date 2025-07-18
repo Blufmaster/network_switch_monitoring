@@ -49,7 +49,7 @@ def init_db():
         )
     """)
 
-    # Table for device baselines ✅ FIXED LOCATION
+    # Table for device baselines 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS device_baselines (
             device_id INT PRIMARY KEY,
@@ -287,6 +287,64 @@ def delete_old_ping_logs(days=15):
 
 
 
+def get_down_streaks_in_timeframe(hours=None):
+    """
+    Returns devices that have at least one 5× DOWN streak in the given timeframe.
+    If hours is None, it checks all available logs.
+    """
+    if hours is not None:
+        time_threshold = datetime.utcnow() - timedelta(hours=hours)
+    else:
+        time_threshold = None
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Get all device IDs and names
+    cursor.execute("SELECT id, name, ip FROM devices")
+    devices = cursor.fetchall()
+
+    results = []
+
+    for device_id, name, ip in devices:
+        df = get_ping_logs_for_device(device_id, since=time_threshold)
+
+        if df.empty or "status" not in df.columns:
+            continue
+
+        streak = 0
+        count = 0
+        last_streak_time = None
+        i = 0
+
+        while i < len(df):
+            if df.iloc[i]["status"] == "DOWN":
+                streak += 1
+                if streak == 5:
+                    count += 1
+                    last_streak_time = df.iloc[i]["timestamp"]
+                    # Skip all consecutive DOWNs beyond the 5th to avoid counting overlap
+                    while i < len(df) and df.iloc[i]["status"] == "DOWN":
+                        i += 1
+                    streak = 0
+                    continue
+            else:
+                streak = 0
+            i += 1
+
+        if count > 0:
+            results.append({
+                "device_name": name,
+                "ip": ip,
+                "occurrences": count,
+                "last_occurred": last_streak_time
+            })
+
+    cursor.close()
+    conn.close()
+    return results
+
+
 
 
 #run this file directly to initialize the database
@@ -296,6 +354,3 @@ def delete_old_ping_logs(days=15):
 
 
 
-if __name__ == "__main__":
-    init_db()
-    print("✅ Database initialized.")
