@@ -191,7 +191,7 @@ def run_risk_score_updater():
     while True:
         print("[AI] Computing risk scores...")
         compute_risk_scores(minutes=10)  # Uses last 60 minutes of data
-        time.sleep(60)  # Run every 5 minutes (change to 300s from 60s)
+        time.sleep(60)  # Run every 1 minutes (change to 300s from 60s)
         # final update every 5 minutes using the last 60 minutes of logs
 
 

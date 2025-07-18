@@ -5,6 +5,8 @@ from concurrent.futures import ThreadPoolExecutor
 from database import get_devices, get_device_id_by_ip, log_ping_result
 from notifier import send_alert_email
 from notification import send_whatsapp_alert
+from telegram_notifier import send_telegram_alert
+
 
 device_status = {}
 failure_count = {}
@@ -28,6 +30,8 @@ def handle_ping(dev):
         print(f"[ALERT] Device down: {name} has been down for 3 cycles ({ip}). Notifying {email}")
         send_alert_email(name, ip, email, issue="Device Down")
         send_whatsapp_alert(name, ip)
+        send_telegram_alert(name, ip)
+
 
         alert_sent.add(ip)
 

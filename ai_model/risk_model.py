@@ -7,7 +7,7 @@ from database import get_connection
 import logging
 import argparse
 from notification import send_whatsapp_alert
-
+from telegram_notifier import send_telegram_alert
 # Setup logging
 logging.basicConfig(
     format='[%(asctime)s] %(levelname)s: %(message)s',
@@ -149,6 +149,7 @@ def compute_risk_scores(minutes=5, verbose=False, export_features=False):
                         msg = f"⚠️ Very unstable device detected: {name} ({ip}) – High latency spike."
                         logging.critical(msg)
                         send_whatsapp_alert(name, ip, issue="High Latency Spike") # 5 spikes in a row issuee
+                        send_telegram_alert(name, ip)
     cursor.close()
     conn.close()
 
